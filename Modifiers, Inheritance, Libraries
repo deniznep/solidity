@@ -1,0 +1,113 @@
+pragma solidity ^0.4.25;
+
+
+contract RoleTesting {
+    
+    
+    //Assigning a new address to act as the CEO - only available to the current CEO.
+    
+    function setCEO(address _newCEO) external onlyCEO {
+        require (_newCEO != address(0));
+        
+        ceoAddress = _newCEO;
+    }
+    
+    
+    //Assigning a new address to act as the CFO - only available to the current CEO..
+    
+    function setCFO(address _newCFO) external onlyCEO {
+        require (_newCFO != address(0));
+        
+        cfoAddress = _newCFO;
+    }
+    
+    
+    //Assigning a new address to act as the COO - onyl available to the current CEO.
+    
+    function setCOO(address _newCOO) external onlyCEO {
+        require (_newCOO != address(0));
+        
+        cooAddress = _newCOO;
+    }
+    
+    //onlyCEO modifier is attached to setCEO, setCFO, setCOO functions - therefore only the CEO can appoint them
+    
+    
+//Ways of error handling in Solidity 
+
+contract ThrowTest {
+    
+    function testAssert() {
+        assert(1 == 2);
+    }
+    
+    function testRequire() {
+        require(2 == 1);
+    }
+    
+    function testRevert() {           // has to do with reverting GAS and penalizing other by reverting their transactions/GAS lol
+        revert();
+    }
+    
+    function testThrow() {             // Throw is now extinct 
+        throw;
+    }
+    
+    
+}    
+}
+
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+pragma solidity ^0.4.25;
+
+
+library IntExtended {
+    
+    function increment(uint _self) returns (uint) {
+        return _self+1;
+    }
+    
+    function decrement(uint _self) returns (uint) {
+        return _self-1;
+    }
+    
+    function incrementByValue(uint _self, uint _value) returns (uint) {
+        return (_self - _value);
+    }
+    
+    function decrementByValue(uint _self, uint _value) returns (uint) {
+        return (_self - _value);
+    }
+    
+}
+
+
+
+pragma solidity ^0.4.25;
+
+import "browser/library.sol";
+
+
+contract TestLibrary {
+    using IntExtended for uint;
+    
+    function testIncrement(uint _base) return (uint) {
+        return _base.increment();
+    }
+    
+    function testDecrement(uint _base) return (uint) {
+        return _base.decrement();
+    }
+    
+    function testIncrementByValue(uint _base, uint _value) return (uint) {
+        return _base.incrementByValue(_value);
+    }
+    
+    function testDecrementByValue(unit _base, uint  _value) return (uint) {
+        return _base.testDecrementByValue(_value);
+    }
+    
+}
+
