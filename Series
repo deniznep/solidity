@@ -1,0 +1,201 @@
+pragma solidity ^0.4.25;
+
+contract Series {
+    
+    // title of the Series
+    string public title;
+    
+    // amount that the owner will recieve from each pledger per episode
+    uint public pledgePerEpisode;
+    
+    // periodicity of episodes, in number of blocks to limit the possibility of owner draining pledgers' 
+    // accounts by publishing multiple episodes quickly
+    uint public minimumPublicationFrequency; 
+    
+    
+    // to keep track of how each publisher pledged, knowing that this pledge will decrease every time a new episode is published
+    mapping(address => uint) public pledges;
+    
+    // to keep a list of all the pledgers of the Series
+    address[] pledgers;
+    
+    address owner;
+    
+    // to keep track of the last time an episode was published + limit frequency of publications
+    uint lastPublicationBlock;
+    
+    // to keep track of all published episodes + making sure the same owner doesn't publish an episode twice
+    mapping(bytes32 => bool) public publishedEpisode;
+    
+
+// EVENTS
+    
+    // Emitted when a new pledger joins the Series
+    event NewPledger(address pledger);
+    
+    // Emitted when a pledger pledges some amount, whether a new pledger or an existing one topping up his account
+    event NewPledge(address indexed pledger, uint pledge, uint totalPledge);
+    
+    //Emitted when the owner publishes a new episode
+    // parameters: Hash of the published episode + How much the owner recieveed for the episode
+    event NewPublication(bytes32 episodeHash, uint episodePay);
+    
+    // Emitted when a pledger withdraws all his pledge from his account
+    // paramters: Address of withdrawing pledger + Amount sent back to the pledger
+    event Withdrawal(address indexed pledger, uint pledge);
+    
+    // Emitted when a pledge goes lower than pledgePerEpisode 
+    // used to notify the pledger that he should top up his account
+    event PledgeInsufficient(address indexed pledger, uint pledge);
+    
+    event SeriesClosed(uint balanceBeforeClose);
+    
+// CONSTRUCTOR  
+    
+    // configures the series parameters - Title of the series, Amount the owner will recieve from each episode of each pledger
+    // , Number of blocks the owner will have to wait between 2 publications
+    constructor(string _title, uint _pledgePerEpisode, uint _minimumPublicationFrequency) public {
+        title = _title;
+        pledgePerEpisode = _pledgePerEpisode;
+        minimumPublicationFrequency = _minimumPublicationFrequency;
+    }
+    
+    
+// FUNCTIONS 
+    
+  /*
+  * Lets someone increase their pledge.
+  * The first time you pledge, you must pledge at least the minimum pledge per episode.
+  * Then for every new pledge, the amount you already pledged plus the new amount must be at least the minimum pledge per episode
+  * This function is payable so the pledge must be transmitted with msg.value
+  * The owner cannot pledge on its own series.
+  */
+    function pledge() public payable {
+        require(msg.value + pledges[msg.sender] > pledgePerEpisode, "Pledge must be greater than the minimum pledge per Episode");
+        require(msg.sender != owner, "Owner cannot pledge on its own series");
+        
+        if(pledges[msg.sender] == 0) {
+        //    pledges.push(msg.sender);
+            emit NewPledger(msg.sender);
+        }
+        
+        pledges[msg.sender] += msg.value; 
+        emit NewPledge(msg.sender, msg.value, pledges[msg.sender]);
+    }
+    
+   /*
+   * Calculate how much the owner will get paid for next episode
+   */
+  
+    function nextEpisodePay() public view returns (uint) {
+        uint episodePay = 0;
+        for(uint i = 0; i < pledgers.length; i++) {
+            if(pledges[pledgers[i]] > pledgePerEpisode) {
+                episodePay += pledgePerEpisode;
+            }
+        }
+    
+    return episodePay;
+    }
+    
+    
+   /*
+   * This function can only be called by the owner.
+   * And it can only be called if at least minimumPublicationFrequency blocks have passed since lastPublicationBlock
+   * The hash of the published episode (episodeHash) must not have been published yet.
+   * If all those prerequisites are met, then the owner receives pledgePerEpisode times number of pledgers whose pledge is still greater than pledgePerEpisode
+   * @param episodeHash Hash of the episode as published on IPFS for example
+   */
+    function publish(bytes32 episodeHash) public {
+        require(lastPublicationBlock == 0 || block.number > lastPublicationBlock + minimumPublicationFrequency, "Owner cannot publish");
+        require(!publishedEpisode[episodeHash], "This episode has already been published");
+        
+        publishedEpisode[episodeHash] = true;
+        
+        // calculating episode pay by reusing a view function
+        uint episodePay = nextEpisodePay();
+        
+        // updating pledges
+        for(uint i = 0; i < pledgers.length; i++) {
+            
+            if(pledges[pledgers[i]] > pledgePerEpisode) {
+                pledges[pledgers[i]] -= pledgePerEpisode;
+                
+                if(pledges[pledgers[i]] < pledgePerEpisode) {
+                    emit PledgeInsufficient(pledgers[i], pledges[pledgers[i]]);
+                }
+            }
+        }
+        
+        // paying the Owner
+        owner.transfer(episodePay);
+        emit NewPublication(episodeHash, episodePay);
+    }
+    
+   /*
+   * Let a pledger withdraw his entire pledge from his account
+   */
+   function withdraw() public {
+       uint amount = pledges[msg.sender];
+       
+       if(amount > 0) {
+           pledges[msg.sender] = 0;
+           msg.sender.transfer(amount);
+           emit Withdrawal(msg.sender, amount);
+           emit PledgeInsufficient(msg.sender, 0);
+       }
+   }
+    
+   /*
+   * Give their money back to all pledgers before killing the contract
+   */
+   function close() public {
+       for(uint i = 0; i < pledgers.length; i++) {
+           uint amount = pledges[pledgers[i]];
+           
+           if(amount > 0) {
+               pledges[pledgers[i]] = 0;
+               pledgers[i].transfer(amount);
+           }
+       }
+       
+       selfdestruct(owner);
+   }
+    
+
+    function totalPledgers() public view returns(uint) {
+        return pledgers.length;
+    }
+
+
+    function activePledgers() public view returns(uint) {
+        uint active = 0;
+        
+        for(uint i = 0; i < pledgers.length; i++) {
+            if(pledges[pledgers[i]] >= pledgePerEpisode) {
+                active++;
+            }
+        }
+        return active;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
